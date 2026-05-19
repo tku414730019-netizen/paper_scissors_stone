@@ -5,19 +5,21 @@
 }
 
 body {
-  background: linear-gradient(135deg, #0d0d1a 0%, #1a1040 50%, #0a1520 100%);
+  /* 轉為深翠森林與泥土大地的自然漸層色調 */
+  background: linear-gradient(135deg, #0f1f15 0%, #070d09 60%, #1a1c12 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-family: Arial, sans-serif;
+  font-family: 'PingFang TC', 'Microsoft JhengHei', Arial, sans-serif;
 }
 
 #wrap {
   border-radius: 18px;
   overflow: hidden;
-  box-shadow: 0 0 80px rgba(80, 160, 255, .18), 0 0 0 1px rgba(255, 255, 255, .08);
+  /* 將霓虹藍光暈改為溫和的森林生態綠光暈 */
+  box-shadow: 0 0 80px rgba(58, 125, 68, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 canvas {
@@ -29,9 +31,10 @@ video {
 }
 
 #footer {
-  margin-top: 10px;
-  color: rgba(255, 255, 255, .28);
+  margin-top: 14px;
+  /* 調整底部分享文字為柔和的葉綠素色 */
+  color: rgba(143, 188, 143, 0.4);
   font-size: 12px;
-  letter-spacing: .5px;
+  letter-spacing: 1px;
   text-align: center;
 }
