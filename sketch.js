@@ -63,33 +63,121 @@ cv.addEventListener('click', onClk);
 //  GESTURE CLASSIFICATION
 // ─────────────────────────────────────────────────────────────
 function classify(l) {
-    const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+
+    const tips = [8, 12, 16, 20];
+    const pips = [6, 10, 14, 18];
+
+    // 手指是否伸直
     const ext = tips.map((t, i) => l[t].y < l[pips[i]].y);
+
     // ext[0]=食指 ext[1]=中指 ext[2]=無名指 ext[3]=小指
+    const indexOpen  = ext[0];
+    const middleOpen = ext[1];
+    const ringOpen   = ext[2];
+    const pinkyOpen  = ext[3];
+
     const n = ext.filter(Boolean).length;
 
-    // 拇指朝上判斷
-    const thumbUp = l[4].y < l[3].y && l[4].y < l[2].y && l[4].y < l[5].y;
+    // ── 拇指朝上 ─────────────────────────
+    const thumbUp =
+        l[4].y < l[3].y &&
+        l[4].y < l[2].y &&
+        l[4].y < l[5].y;
 
-    // ── 修改 2：新增 six / seven 的辨識，優先於 thumbs_up ──
-    // 比六：大拇指 + 小拇指伸出，食中無名指收起（不分左右手）
-    if (thumbUp && !ext[0] && !ext[1] && !ext[2] && ext[3]) return 'six';
-    // 比七：大拇指 + 食指伸出，中無名小指收起（不分左右手）
-    if (thumbUp && ext[0] && !ext[1] && !ext[2] && !ext[3]) return 'seven';
+    // ── 拇指橫向張開（左右手都適配） ─────
+    const thumbSide =
+        Math.abs(l[4].x - l[3].x) > 0.04;
+
+    // ─────────────────────────────────────
+    // 六：大拇指 + 小拇指
+    // ─────────────────────────────────────
+    if (
+        (thumbUp || thumbSide) &&
+        !indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        pinkyOpen
+    ) {
+        return 'six';
+    }
+
+    // ─────────────────────────────────────
+    // 七（版本1）
+    // 食指橫向、拇指朝上
+    // ─────────────────────────────────────
+    const sevenA =
+        thumbUp &&
+        indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        !pinkyOpen;
+
+    // ─────────────────────────────────────
+    // 七（版本2）
+    // 食指朝上、拇指朝左/右
+    // ─────────────────────────────────────
+    const sevenB =
+        thumbSide &&
+        indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        !pinkyOpen;
+
+    if (sevenA || sevenB) {
+        return 'seven';
+    }
+
+    // ─────────────────────────────────────
     // 比讚（只有拇指）
-    if (thumbUp && n === 0) return 'thumbs_up';
+    // ─────────────────────────────────────
+    if (
+        thumbUp &&
+        !indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        !pinkyOpen
+    ) {
+        return 'thumbs_up';
+    }
 
+    // ─────────────────────────────────────
+    // 猜拳
+    // ─────────────────────────────────────
     if (n === 0) return 'rock';
+
     if (n >= 3) return 'paper';
-    if (ext[0] && ext[1] && !ext[2] && !ext[3]) return 'scissors';
+
+    if (
+        indexOpen &&
+        middleOpen &&
+        !ringOpen &&
+        !pinkyOpen
+    ) {
+        return 'scissors';
+    }
+
     return 'unknown';
 }
 
 function vote(buf) {
+
     if (buf.length < 6) return null;
-    const c = {}; buf.forEach(v => { c[v] = (c[v] || 0) + 1; });
+
+    const c = {};
+
+    buf.forEach(v => {
+        c[v] = (c[v] || 0) + 1;
+    });
+
     let b = null, bn = 0;
-    for (const v in c) if (v !== 'unknown' && c[v] > bn) { bn = c[v]; b = v; }
+
+    for (const v in c) {
+        if (v !== 'unknown' && c[v] > bn) {
+            bn = c[v];
+            b = v;
+        }
+    }
+
     return bn / buf.length >= .55 ? b : null;
 }
 
@@ -486,7 +574,7 @@ function update() {
             enter('reveal');
         }
     }
-    if (st === 'reveal' && el > 1500) {
+    if (st === 'reveal' && el > 2200) {
         const res = pG === cG ? 'draw' : BEATS[pG] === cG ? 'win' : 'lose';
         if (res === 'win') score.w++;
         else if (res === 'lose') score.l++;
@@ -494,9 +582,9 @@ function update() {
         enter(res); maskP = 0;
         if (res === 'win') startFW();
     }
-    if (st === 'win' && el > 4800) { stopFW(); enter('menu'); }
-    if (st === 'lose' && el > 3800) enter('menu');
-    if (st === 'draw' && el > 2800) enter('menu');
+    if (st === 'win' && el > 6200) { stopFW(); enter('menu'); }
+    if (st === 'lose' && el > 5200) enter('menu');
+    if (st === 'draw' && el > 4200) enter('menu');
 }
 
 function onClk(e) {
