@@ -9,21 +9,9 @@ const g = cv.getContext('2d');
 const vid = document.getElementById('vid');
 
 const PICKS = ['rock', 'paper', 'scissors'];
-const EM = {
-    rock: '✊',
-    paper: '🖐',
-    scissors: '✌️',
-    six: '🤙',
-    seven: '👌'
-  };
-  
-  const LB = {
-    rock: '石頭',
-    paper: '布',
-    scissors: '剪刀',
-    six: '六',
-    seven: '七'
-  };
+// ── 修改 1：新增 six (比六) 和 seven (比七) 的顯示字典 ──
+const EM = { rock: '✊', paper: '🖐', scissors: '✌️', thumbs_up: '👍', six: '🤙', seven: '☝️' };
+const LB = { rock: '石頭', paper: '布', scissors: '剪刀', thumbs_up: '讚', six: '比六(結束)', seven: '比七(繼續)' };
 const BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
 const PAL = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#C3A6FF', '#FF9F43', '#56CCF2', '#FD79A8', '#A3F7BF'];
 const SKEL = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -35,15 +23,15 @@ const SKEL = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5
 let st = 'loading', stAt = Date.now();
 const enter = s => { st = s; stAt = Date.now(); };
 
-let pG = null, cG = null;         // player / cpu gesture
-let lm = null, stable = null, handedness = null; // landmarks, gesture, side
-let gBuf = [], holdT = null;      // gesture buffer, hold-start time
-let menuHoldT = null;             // 選單專用計時器
-const BUF = 10, HOLD = 400, CD = 3; // 縮短判定時間 (0.4s)，提升啟動靈敏度
+let pG = null, cG = null;
+let lm = null, stable = null, handedness = null;
+let gBuf = [], holdT = null;
+let menuHoldT = null;
+const BUF = 10, HOLD = 400, CD = 3;
 
 let score = { w: 0, l: 0, d: 0 };
 let parts = [], fwI = null, maskP = 0;
-let wBuf = [], lastSw = 0; const WN = 18; // 縮短緩衝區長度，提升反應速度
+let wBuf = [], lastSw = 0; const WN = 18;
 
 let mx = 0, my = 0;
 cv.addEventListener('mousemove', e => { const r = cv.getBoundingClientRect(); mx = e.clientX - r.left; my = e.clientY - r.top; });
@@ -58,7 +46,7 @@ cv.addEventListener('click', onClk);
     hands.onResults(r => {
         if (r.multiHandLandmarks && r.multiHandLandmarks[0]) {
             lm = r.multiHandLandmarks[0];
-            handedness = r.multiHandedness[0].label; // "Left" or "Right"
+            handedness = r.multiHandedness[0].label;
             const gest = classify(lm);
             gBuf.push(gest); if (gBuf.length > BUF) gBuf.shift();
             stable = vote(gBuf);
@@ -74,62 +62,44 @@ cv.addEventListener('click', onClk);
 // ─────────────────────────────────────────────────────────────
 //  GESTURE CLASSIFICATION
 // ─────────────────────────────────────────────────────────────
-function classify(l){
-
-    const thumbOpen  = Math.abs(l[4].x - l[3].x) > 0.04;
-    const indexOpen  = l[8].y  < l[6].y;
-    const middleOpen = l[12].y < l[10].y;
-    const ringOpen   = l[16].y < l[14].y;
-    const pinkyOpen  = l[20].y < l[18].y;
-  
-    // 比六：大拇指 + 小拇指
-    if(
-      thumbOpen &&
-      pinkyOpen &&
-      !indexOpen &&
-      !middleOpen &&
-      !ringOpen
-    ){
-      return 'six';
-    }
-  
-    // 比七：大拇指 + 食指
-    if(
-      thumbOpen &&
-      indexOpen &&
-      !middleOpen &&
-      !ringOpen &&
-      !pinkyOpen
-    ){
-      return 'seven';
-    }
-  
-    // 原本猜拳邏輯
-    const ext = [indexOpen, middleOpen, ringOpen, pinkyOpen];
+function classify(l) {
+    const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
+    const ext = tips.map((t, i) => l[t].y < l[pips[i]].y);
+    // ext[0]=食指 ext[1]=中指 ext[2]=無名指 ext[3]=小指
     const n = ext.filter(Boolean).length;
-  
-    if(n === 0) return 'rock';
-    if(n >= 3) return 'paper';
-  
-    if(
-      ext[0] &&
-      ext[1] &&
-      !ext[2] &&
-      !ext[3]
-    ){
-      return 'scissors';
-    }
-  
+
+    // 拇指朝上判斷
+    const thumbUp = l[4].y < l[3].y && l[4].y < l[2].y && l[4].y < l[5].y;
+
+    // ── 修改 2：新增 six / seven 的辨識，優先於 thumbs_up ──
+    // 比六：大拇指 + 小拇指伸出，食中無名指收起（不分左右手）
+    if (thumbUp && !ext[0] && !ext[1] && !ext[2] && ext[3]) return 'six';
+    // 比七：大拇指 + 食指伸出，中無名小指收起（不分左右手）
+    if (thumbUp && ext[0] && !ext[1] && !ext[2] && !ext[3]) return 'seven';
+    // 比讚（只有拇指）
+    if (thumbUp && n === 0) return 'thumbs_up';
+
+    if (n === 0) return 'rock';
+    if (n >= 3) return 'paper';
+    if (ext[0] && ext[1] && !ext[2] && !ext[3]) return 'scissors';
     return 'unknown';
-  }
+}
+
+function vote(buf) {
+    if (buf.length < 6) return null;
+    const c = {}; buf.forEach(v => { c[v] = (c[v] || 0) + 1; });
+    let b = null, bn = 0;
+    for (const v in c) if (v !== 'unknown' && c[v] > bn) { bn = c[v]; b = v; }
+    return bn / buf.length >= .55 ? b : null;
+}
 
 // ─────────────────────────────────────────────────────────────
-//  SWIPE DETECTION  (mirrored coords: right swipe = +dx)
+//  SWIPE DETECTION
 // ─────────────────────────────────────────────────────────────
 function checkSwipe() {
     if (wBuf.length < WN || Date.now() - lastSw < 1000) return null;
     const span = wBuf.at(-1).t - wBuf[0].t;
-    if (span > 800) return null; // 揮動太慢不列入計算
+    if (span > 800) return null;
     const dx = wBuf.at(-1).x - wBuf[0].x;
     if (dx > 0.22) { lastSw = Date.now(); wBuf = []; return 'right'; }
     if (dx < -0.22) { lastSw = Date.now(); wBuf = []; return 'left'; }
@@ -238,36 +208,27 @@ function btn(lbl, x, y, w, h, bg) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  FAILURE MASK  (theatrical demonic face)
+//  FAILURE MASK
 // ─────────────────────────────────────────────────────────────
 function drawMask(cx, cy, p) {
     if (p <= 0) return;
     const r = 78 * p;
     g.save(); g.globalAlpha = p;
-
-    // face ellipse
     g.fillStyle = '#4A0000'; g.strokeStyle = '#BB1100'; g.lineWidth = 3;
     g.beginPath(); g.ellipse(cx, cy, r, r * 1.15, 0, 0, Math.PI * 2); g.fill(); g.stroke();
-
     if (p > .35) {
         const q = (p - .35) / .65;
-
-        // eyes (hollow, despairing)
         [cx - 24, cx + 24].forEach(ex => {
             g.fillStyle = '#1A0000';
             g.beginPath(); g.ellipse(ex, cy - 16, 13 * q, 8 * q, 0, 0, Math.PI * 2); g.fill();
             g.fillStyle = '#DDD';
             g.beginPath(); g.arc(ex + 3, cy - 20, 4 * q, 0, Math.PI * 2); g.fill();
         });
-
-        // sad mouth (downward arc)
         g.strokeStyle = '#1A0000'; g.lineWidth = 4; g.lineCap = 'round';
         g.beginPath();
         g.moveTo(cx - 28 * q, cy + 26);
         g.quadraticCurveTo(cx, cy + 52 * q, cx + 28 * q, cy + 26);
         g.stroke();
-
-        // tears
         if (q > .5) {
             const tp = (q - .5) / .5;
             g.fillStyle = 'rgba(90,140,255,.85)';
@@ -275,8 +236,6 @@ function drawMask(cx, cy, p) {
                 g.beginPath(); g.ellipse(tx, cy - 2 + 28 * tp, 4, 13 * tp, 0, 0, Math.PI * 2); g.fill();
             });
         }
-
-        // horns
         [[-1, cx - r + 15], [1, cx + r - 15]].forEach(([d, hx]) => {
             g.fillStyle = '#7A0000'; g.strokeStyle = '#FF3300'; g.lineWidth = 2;
             g.beginPath();
@@ -285,16 +244,12 @@ function drawMask(cx, cy, p) {
             g.lineTo(hx + 10 * d, cy - r * .78);
             g.closePath(); g.fill(); g.stroke();
         });
-
-        // X cheeks (shame marks)
         g.strokeStyle = '#CC0000'; g.lineWidth = 3; g.lineCap = 'round';
         [[cx - 50, cy], [cx + 50, cy]].forEach(([ex, ey]) => {
             const s = 7 * q;
             g.beginPath(); g.moveTo(ex - s, ey - s); g.lineTo(ex + s, ey + s); g.stroke();
             g.beginPath(); g.moveTo(ex + s, ey - s); g.lineTo(ex - s, ey + s); g.stroke();
         });
-
-        // decorative rim circles
         g.strokeStyle = 'rgba(180,0,0,.5)'; g.lineWidth = 1.5;
         g.beginPath(); g.ellipse(cx, cy, r * 1.12, r * 1.28, 0, 0, Math.PI * 2); g.stroke();
     }
@@ -307,6 +262,25 @@ function drawMask(cx, cy, p) {
 function drawVid() {
     if (!vid || vid.readyState < 2) return;
     g.save(); g.translate(W, 0); g.scale(-1, 1); g.drawImage(vid, 0, 0, W, H); g.restore();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SHARED RESULT BACKGROUND（修改 3：新增共用函式，讓勝負畫面保留牌卡）
+//  在 win / lose / draw 三個畫面都先呼叫此函式，維持和 reveal 相同的牌卡版型，
+//  解決「勝負畫面一閃而過、牌卡消失」的問題。
+// ─────────────────────────────────────────────────────────────
+function drawResultBg() {
+    // 全螢幕暗底（與 reveal 相同，蓋掉鏡頭畫面）
+    g.fillStyle = 'rgba(0,0,0,.82)'; g.fillRect(0, 0, W, H);
+    // 左藍 / 右紅色塊
+    g.fillStyle = 'rgba(20,70,200,.28)'; g.fillRect(0, 0, W / 2 - 2, H);
+    g.fillStyle = 'rgba(200,20,20,.28)'; g.fillRect(W / 2 + 2, 0, W / 2 - 2, H);
+    // 玩家 / 電腦標籤（緊接在頂部橫幅之下）
+    boldT('你', W / 4, 118, 17, '#AAD4FF');
+    boldT('電腦', W * 3 / 4, 118, 17, '#FFAAAA');
+    // 牌卡（和 reveal 完全相同的座標）
+    card(pG, 42, H / 2 - 72, W / 2 - 82, 144, '#4488FF');
+    card(cG, W / 2 + 40, H / 2 - 72, W / 2 - 82, 144, '#FF4444');
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -330,9 +304,9 @@ function dIdle() {
         const bgCol = isValid ? 'rgba(0,180,100,0.6)' : 'rgba(0,0,0,0.55)';
         g.fillStyle = bgCol; rr(W - 145, 8, 130, 48, 10); g.fill();
         g.font = '22px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-        g.fillStyle = '#FFF'; g.fillText(EM[stable], W - 115, 32);
+        g.fillStyle = '#FFF'; g.fillText(EM[stable] || '?', W - 115, 32);
         g.font = 'bold 14px Arial'; g.fillStyle = isValid ? '#FFF' : '#00FF88';
-        g.fillText(LB[stable], W - 75, 32); g.restore();
+        g.fillText(LB[stable] || stable, W - 75, 32); g.restore();
     }
     const gr = g.createLinearGradient(0, H - 148, 0, H);
     gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.9)');
@@ -343,7 +317,7 @@ function dIdle() {
         smT('比出  ✊ 石頭  ·  🖐 布  ·  ✌️ 剪刀', W / 2, H - 56, 15);
     } else if (stable) {
         const isValid = PICKS.includes(stable);
-        boldT(isValid ? `鎖定中：${EM[stable]} ${LB[stable]}` : `請換個手勢：${EM[stable]}`, W / 2, H - 102, 20, isValid ? '#00FF88' : '#FFD93D', null, isValid ? '#00FF88' : null);
+        boldT(isValid ? `鎖定中：${EM[stable]} ${LB[stable]}` : `請換個手勢：${EM[stable] || stable}`, W / 2, H - 102, 20, isValid ? '#00FF88' : '#FFD93D', null, isValid ? '#00FF88' : null);
         const pct = holdT ? Math.min(1, (Date.now() - holdT) / HOLD) : 0;
         g.fillStyle = 'rgba(255,255,255,.18)'; rr(W / 2 - 104, H - 70, 208, 13, 6); g.fill();
         g.fillStyle = pct < .5 ? '#FFD93D' : pct < .9 ? '#4ECDC4' : '#00FF88';
@@ -389,37 +363,51 @@ function dReveal() {
     scoreHUD();
 }
 
+// ── 修改 4：dWin / dLose / dDraw 皆先呼叫 drawResultBg() ──
+// 讓牌卡在勝負結果畫面持續顯示，修正「勝負畫面消失」的問題
 function dWin() {
+    drawResultBg();
     drawP(); scoreHUD();
     const el = Date.now() - stAt, pulse = 1 + .07 * Math.sin(el / 170);
-    g.fillStyle = 'rgba(0,0,0,.65)'; g.fillRect(0, 0, W, 88);
-    boldT('🎉 恭喜你贏了！🎉', W / 2, 44, Math.floor(44 * pulse), '#FFD700', '#FF6600', '#FFD700');
-    g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, H - 76, W, 76);
-    smT(`你的 ${EM[pG]}${LB[pG]}  打敗了  電腦的 ${EM[cG]}${LB[cG]}`, W / 2, H - 38, 21, '#FFF');
+    // 頂部橫幅
+    g.fillStyle = 'rgba(0,0,0,.80)'; g.fillRect(0, 0, W, 96);
+    boldT('🎉 恭喜你贏了！🎉', W / 2, 48, Math.floor(40 * pulse), '#FFD700', '#FF6600', '#FFD700');
+    // 底部說明
+    g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, H - 62, W, 62);
+    smT(`你的 ${EM[pG]}${LB[pG]}  打敗了  電腦的 ${EM[cG]}${LB[cG]}`, W / 2, H - 31, 19, '#FFF');
 }
 
 function dLose() {
     const el = Date.now() - stAt;
     maskP = Math.min(1, el / 700);
-    g.fillStyle = `rgba(140,0,0,${maskP * .35})`; g.fillRect(0, 0, W, H);
-    drawMask(W * .72, H * .42, maskP);
+    drawResultBg();
+    // 紅色氛圍疊加在底層
+    g.fillStyle = `rgba(140,0,0,${maskP * .28})`; g.fillRect(0, 0, W, H);
+    // 電腦側出現惡魔面具（移至卡片下方空間）
+    drawMask(W * .72, H * .78, maskP * .85);
     scoreHUD();
-    g.fillStyle = 'rgba(0,0,0,.72)'; g.fillRect(0, 0, W, 88);
+    // 頂部橫幅
+    g.fillStyle = 'rgba(0,0,0,.82)'; g.fillRect(0, 0, W, 96);
     const sh = el < 800 ? Math.sin(el / 38) * 4 : 0;
-    boldT('😢 你輸了！', W / 2 + sh, 44, 44, '#FF2222', '#000', '#FF2222');
-    g.fillStyle = 'rgba(0,0,0,.65)'; g.fillRect(0, H - 76, W, 76);
-    smT(`你的 ${EM[pG]}${LB[pG]}  輸給了  電腦的 ${EM[cG]}${LB[cG]}`, W / 2, H - 38, 21, '#FFF');
+    boldT('😢 你輸了！', W / 2 + sh, 48, 44, '#FF2222', '#000', '#FF2222');
+    // 底部說明
+    g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, H - 62, W, 62);
+    smT(`你的 ${EM[pG]}${LB[pG]}  輸給了  電腦的 ${EM[cG]}${LB[cG]}`, W / 2, H - 31, 19, '#FFF');
 }
 
 function dDraw() {
     const el = Date.now() - stAt, pulse = 1 + .06 * Math.sin(el / 160);
+    drawResultBg();
     scoreHUD();
-    g.fillStyle = 'rgba(0,0,0,.65)'; g.fillRect(0, 0, W, 88);
-    boldT('🤝 平局！再來一次！', W / 2, 44, Math.floor(42 * pulse), '#FFD93D', '#000', '#FFD93D');
-    g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, H - 76, W, 76);
-    smT(`你們都出了 ${EM[pG]}${LB[pG]}，旗鼓相當！`, W / 2, H - 38, 21, '#FFF');
+    // 頂部橫幅
+    g.fillStyle = 'rgba(0,0,0,.80)'; g.fillRect(0, 0, W, 96);
+    boldT('🤝 平局！再來一次！', W / 2, 48, Math.floor(38 * pulse), '#FFD93D', '#000', '#FFD93D');
+    // 底部說明
+    g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, H - 62, W, 62);
+    smT(`你們都出了 ${EM[pG]}${LB[pG]}，旗鼓相當！`, W / 2, H - 31, 19, '#FFF');
 }
 
+// ── 修改 5：dMenu 更新選單手勢提示文字，改用比六/比七 ──
 function dMenu() {
     g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, 0, W, H);
     scoreHUD();
@@ -429,42 +417,24 @@ function dMenu() {
     g.font = '14px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(255,255,255,.5)';
     g.fillText(`✅ ${score.w}勝  ❌ ${score.l}敗  🤝 ${score.d}平`, W / 2, H / 2 - 33); g.restore();
-    smT('🤙 比六：結束　｜　👌 比七：繼續', W / 2, H / 2 + 6, 14);
+    smT('點擊按鈕，或比出手勢選擇', W / 2, H / 2 + 6, 14);
     const bw = 132, bh = 52, by = H / 2 + 24;
-    btn('🏠 結束', W / 2 - bw - 8, by, bw, bh, '#CC2200'); 
-    btn('🎮 繼續', W / 2 + 8, by, bw, bh, '#00AA44');      
+    btn('🏠 結束', W / 2 - bw - 8, by, bw, bh, '#CC2200');
+    btn('🎮 繼續', W / 2 + 8, by, bw, bh, '#00AA44');
     g.save();
     g.fillStyle = 'rgba(255,255,255,.06)'; rr(20, H / 2 + 90, W - 40, 32, 8); g.fill();
     g.font = '13px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(255,255,255,.45)';
-    g.fillText(
-        '💡 不分左右手：🤙 結束遊戲 ・ 👌 再玩一局',
-        W / 2,
-        H / 2 + 106
-      ); g.restore();
+    // ── 修改後的提示文字：比六結束、比七繼續，不分左右手 ──
+    g.fillText('💡 🤙 比六（拇指+小指）🏠 結束  ·  ☝️ 比七（拇指+食指）🎮 繼續', W / 2, H / 2 + 106); g.restore();
 
-    // 繪製選單手勢進度條
+    // 手勢偵測進度條（改為偵測 six / seven，不再分左右手）
     if (st === 'menu' && (stable === 'six' || stable === 'seven')) {
-
-        const pct = menuHoldT
-            ? Math.min(1, (Date.now() - menuHoldT) / HOLD)
-            : 0;
-    
-        const isContinue = stable === 'seven';
-        const col = isContinue ? '#00FF88' : '#FF4444';
-    
-        g.fillStyle = 'rgba(255,255,255,0.1)';
-        rr(W / 2 - 100, H / 2 + 132, 200, 8, 4);
-        g.fill();
-    
-        g.fillStyle = col;
-        rr(W / 2 - 100, H / 2 + 132, 200 * pct, 8, 4);
-        g.fill();
-    
-        const txt = isContinue
-            ? '🎮 準備繼續...'
-            : '🏠 準備結束...';
-    
+        const pct = menuHoldT ? Math.min(1, (Date.now() - menuHoldT) / HOLD) : 0;
+        const col = stable === 'seven' ? '#00FF88' : '#FF4444';
+        g.fillStyle = 'rgba(255,255,255,0.1)'; rr(W / 2 - 100, H / 2 + 132, 200, 8, 4); g.fill();
+        g.fillStyle = col; rr(W / 2 - 100, H / 2 + 132, 200 * pct, 8, 4); g.fill();
+        const txt = stable === 'seven' ? '☝️ 比七 準備繼續...' : '🤙 比六 準備結束...';
         boldT(txt, W / 2, H / 2 + 158, 20, col, '#000');
     }
 }
@@ -478,53 +448,37 @@ function dEnded() {
     smT('重新整理頁面可再次遊戲', W / 2, H / 2 + 60, 15, 'rgba(255,255,255,.32)');
 }
 
+// ─────────────────────────────────────────────────────────────
+//  UPDATE
+// ─────────────────────────────────────────────────────────────
 function update() {
     const now = Date.now(), el = now - stAt;
     tickP();
 
-    // 選單狀態的邏輯處理
-    if(st==='menu'){
-
-        if(stable==='six' || stable==='seven'){
-    
-            if(!menuHoldT) menuHoldT=now;
-    
-            if(now-menuHoldT>=HOLD){
-    
-                if(stable==='seven'){
-                    startGame();
-                }
-    
-                if(stable==='six'){
-                    enter('ended');
-                }
-    
-                menuHoldT=null;
+    // ── 修改 6：選單改用 six（結束）/ seven（繼續），不分左右手 ──
+    if (st === 'menu') {
+        if (stable === 'six' || stable === 'seven') {
+            if (!menuHoldT) menuHoldT = now;
+            if (now - menuHoldT >= HOLD) {
+                if (stable === 'seven') startGame();   // 比七 → 繼續
+                else enter('ended');                   // 比六 → 結束
+                menuHoldT = null;
             }
-    
-        }else{
-            menuHoldT=null;
+        } else {
+            menuHoldT = null;
         }
     }
 
     if (st === 'idle') {
         if (stable && PICKS.includes(stable)) {
-            // 如果是新的手勢，才重新計時
-            if (pG !== stable) {
-                holdT = now;
-                pG = stable;
-            }
-            if (now - holdT >= HOLD) {
-                enter('countdown');
-            }
-        } else if (stable === 'thumbs_up' || !lm) {
-            // 只有在手消失或是變成「比讚」時才重置，避免閃爍中斷計時
-            holdT = null;
-            pG = null;
+            if (pG !== stable) { holdT = now; pG = stable; }
+            if (now - holdT >= HOLD) { enter('countdown'); }
+        } else if (stable === 'thumbs_up' || stable === 'six' || stable === 'seven' || !lm) {
+            // ── 修改 7：six / seven 也要重置計時，避免誤觸發倒數 ──
+            holdT = null; pG = null;
         }
     }
     if (st === 'countdown') {
-        // 修正：倒數時也只能更新為有效的猜拳手勢
         if (stable && PICKS.includes(stable)) pG = stable;
         if (el >= CD * 1000) {
             if (!pG) pG = PICKS[Math.random() * 3 | 0];
@@ -550,25 +504,15 @@ function onClk(e) {
     const r = cv.getBoundingClientRect();
     const cx = e.clientX - r.left, cy = e.clientY - r.top;
     const bw = 132, bh = 52, by = H / 2 + 24;
-    if (cx >= W / 2 + 8 && cx <= W / 2 + 8 + bw && cy >= by && cy <= by + bh) startGame(); // 右鍵：繼續
-    if (cx >= W / 2 - bw - 8 && cx <= W / 2 - 8 && cy >= by && cy <= by + bh) enter('ended'); // 左鍵：結束
+    if (cx >= W / 2 + 8 && cx <= W / 2 + 8 + bw && cy >= by && cy <= by + bh) startGame();
+    if (cx >= W / 2 - bw - 8 && cx <= W / 2 - 8 && cy >= by && cy <= by + bh) enter('ended');
 }
 
 function startGame() {
-
-    parts = [];
-    maskP = 0;
-    gBuf = [];
-    stable = null;
-
-    holdT = null;
-    menuHoldT = null;
-
-    pG = null;
-    cG = null;
-
-    stopFW();
-    enter('idle');
+    parts = []; maskP = 0; gBuf = []; stable = null;
+    holdT = null; pG = null; cG = null;
+    menuHoldT = null;  // ── 修改 8：重置選單計時器，避免殘留狀態 ──
+    stopFW(); enter('idle');
 }
 
 function loop() {
