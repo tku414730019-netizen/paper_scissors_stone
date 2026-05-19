@@ -9,6 +9,7 @@ const g = cv.getContext('2d');
 const vid = document.getElementById('vid');
 
 const PICKS = ['rock', 'paper', 'scissors'];
+// ── 修改 1：新增 six (比六) 和 seven (比七) 的顯示字典 ──
 const EM = { rock: '✊', paper: '🖐', scissors: '✌️', thumbs_up: '👍', six: '🤙', seven: '☝️' };
 const LB = { rock: '石頭', paper: '布', scissors: '剪刀', thumbs_up: '讚', six: '比六(結束)', seven: '比七(繼續)' };
 const BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
@@ -59,20 +60,17 @@ cv.addEventListener('click', onClk);
 })();
 
 // ─────────────────────────────────────────────────────────────
-//  GESTURE CLASSIFICATION (已優化：改用 2D 距離法防傾斜誤判)
+//  GESTURE CLASSIFICATION
 // ─────────────────────────────────────────────────────────────
 function classify(l) {
+
     const tips = [8, 12, 16, 20];
     const pips = [6, 10, 14, 18];
-    const mcps = [5, 9, 13, 17]; // 指根關節
 
-    // 計算兩點間的歐幾里得距離
-    const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
+    // 手指是否伸直
+    const ext = tips.map((t, i) => l[t].y < l[pips[i]].y);
 
-    // 透過 2D 距離比例判定手指是否伸直（指尖到指根距離 > 第二關節到指根距離的 1.25 倍）
-    // 這樣即使手勢向前衝或歪斜，比例依舊不變，能極大程度修正石頭辨識不準的問題
-    const ext = tips.map((t, i) => dist(l[t], l[mcps[i]]) > dist(l[pips[i]], l[mcps[i]]) * 1.25);
-
+    // ext[0]=食指 ext[1]=中指 ext[2]=無名指 ext[3]=小指
     const indexOpen  = ext[0];
     const middleOpen = ext[1];
     const ringOpen   = ext[2];
@@ -81,42 +79,107 @@ function classify(l) {
     const n = ext.filter(Boolean).length;
 
     // ── 拇指朝上 ─────────────────────────
-    const thumbUp = l[4].y < l[3].y && l[4].y < l[2].y && l[4].y < l[5].y;
+    const thumbUp =
+        l[4].y < l[3].y &&
+        l[4].y < l[2].y &&
+        l[4].y < l[5].y;
 
-    // ── 拇指橫向張開 ─────────────────────
-    const thumbSide = Math.abs(l[4].x - l[3].x) > 0.04;
+    // ── 拇指橫向張開（左右手都適配） ─────
+    const thumbSide =
+        Math.abs(l[4].x - l[3].x) > 0.04;
 
+    // ─────────────────────────────────────
     // 六：大拇指 + 小拇指
-    if ((thumbUp || thumbSide) && !indexOpen && !middleOpen && !ringOpen && pinkyOpen) {
+    // ─────────────────────────────────────
+    if (
+        (thumbUp || thumbSide) &&
+        !indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        pinkyOpen
+    ) {
         return 'six';
     }
 
-    // 七（版本1 與 版本2）
-    const sevenA = thumbUp && indexOpen && !middleOpen && !ringOpen && !pinkyOpen && n === 1;
-    const sevenB = thumbSide && indexOpen && !middleOpen && !ringOpen && !pinkyOpen && n === 1;
-    if (sevenA || sevenB) return 'seven';
+    // ─────────────────────────────────────
+    // 七（版本1）
+    // 食指橫向、拇指朝上
+    // ─────────────────────────────────────
+    const sevenA =
+        thumbUp &&
+        indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        !pinkyOpen &&
+        n === 1;
 
+    // ─────────────────────────────────────
+    // 七（版本2）
+    // 食指朝上、拇指朝左/右
+    // ─────────────────────────────────────
+    const sevenB =
+        thumbSide &&
+        indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        !pinkyOpen &&
+        n === 1;
+
+    if (sevenA || sevenB) {
+        return 'seven';
+    }
+
+    // ─────────────────────────────────────
     // 比讚（只有拇指）
-    if (thumbUp && !indexOpen && !middleOpen && !ringOpen && !pinkyOpen) {
+    // ─────────────────────────────────────
+    if (
+        thumbUp &&
+        !indexOpen &&
+        !middleOpen &&
+        !ringOpen &&
+        !pinkyOpen
+    ) {
         return 'thumbs_up';
     }
 
-    // 猜拳核心邏輯
-    if (n === 0) return 'rock';     // 四根手指都收緊 -> 100% 是石頭
-    if (n >= 3) return 'paper';     // 三根以上張開 -> 布
-    if (indexOpen && middleOpen && !ringOpen && !pinkyOpen) return 'scissors'; // 只有食指中指 -> 剪刀
+    // ─────────────────────────────────────
+    // 猜拳
+    // ─────────────────────────────────────
+    if (n === 0) return 'rock';
+
+    if (n >= 3) return 'paper';
+
+    if (
+        indexOpen &&
+        middleOpen &&
+        !ringOpen &&
+        !pinkyOpen
+    ) {
+        return 'scissors';
+    }
 
     return 'unknown';
 }
 
 function vote(buf) {
+
     if (buf.length < 6) return null;
+
     const c = {};
-    buf.forEach(v => { c[v] = (c[v] || 0) + 1; });
+
+    buf.forEach(v => {
+        c[v] = (c[v] || 0) + 1;
+    });
+
     let b = null, bn = 0;
+
     for (const v in c) {
-        if (v !== 'unknown' && c[v] > bn) { bn = c[v]; b = v; }
+        if (v !== 'unknown' && c[v] > bn) {
+            bn = c[v];
+            b = v;
+        }
     }
+
     return bn / buf.length >= .55 ? b : null;
 }
 
@@ -211,7 +274,6 @@ function scoreHUD() {
     g.restore();
 }
 
-// 修正後的 card 渲染支援
 function card(gest, x, y, w, h, acc, a = 1) {
     g.save(); g.globalAlpha = a;
     g.fillStyle = acc + '22'; g.strokeStyle = acc; g.lineWidth = 2;
@@ -293,14 +355,20 @@ function drawVid() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SHARED RESULT BACKGROUND
+//  SHARED RESULT BACKGROUND（修改 3：新增共用函式，讓勝負畫面保留牌卡）
+//  在 win / lose / draw 三個畫面都先呼叫此函式，維持和 reveal 相同的牌卡版型，
+//  解決「勝負畫面一閃而過、牌卡消失」的問題。
 // ─────────────────────────────────────────────────────────────
 function drawResultBg() {
+    // 全螢幕暗底（與 reveal 相同，蓋掉鏡頭畫面）
     g.fillStyle = 'rgba(0,0,0,.82)'; g.fillRect(0, 0, W, H);
+    // 左藍 / 右紅色塊
     g.fillStyle = 'rgba(20,70,200,.28)'; g.fillRect(0, 0, W / 2 - 2, H);
     g.fillStyle = 'rgba(200,20,20,.28)'; g.fillRect(W / 2 + 2, 0, W / 2 - 2, H);
+    // 玩家 / 電腦標籤（緊接在頂部橫幅之下）
     boldT('你', W / 4, 118, 17, '#AAD4FF');
     boldT('電腦', W * 3 / 4, 118, 17, '#FFAAAA');
+    // 牌卡（和 reveal 完全相同的座標）
     card(pG, 42, H / 2 - 72, W / 2 - 82, 144, '#4488FF');
     card(cG, W / 2 + 40, H / 2 - 72, W / 2 - 82, 144, '#FF4444');
 }
@@ -311,7 +379,7 @@ function drawResultBg() {
 function dLoading() {
     g.fillStyle = '#0d1117'; g.fillRect(0, 0, W, H);
     const t = Date.now() / 1000;
-    boldT('載入 AI 手勢辨識中…', W / 2, H / 2 - 24, 26, '#FFF', null, '#4ECDC4');
+    boldT('載入 ai 手勢辨識中…', W / 2, H / 2 - 24, 26, '#FFF', null, '#4ECDC4');
     g.save(); g.strokeStyle = '#4ECDC4'; g.lineWidth = 5; g.lineCap = 'round';
     g.beginPath(); g.arc(W / 2, H / 2 + 44, 24, t * 2.8, t * 2.8 + Math.PI * 1.4); g.stroke(); g.restore();
     smT('請允許攝影機存取', W / 2, H / 2 + 94, 14, 'rgba(255,255,255,.35)');
@@ -385,12 +453,16 @@ function dReveal() {
     scoreHUD();
 }
 
+// ── 修改 4：dWin / dLose / dDraw 皆先呼叫 drawResultBg() ──
+// 讓牌卡在勝負結果畫面持續顯示，修正「勝負畫面消失」的問題
 function dWin() {
     drawResultBg();
     drawP(); scoreHUD();
     const el = Date.now() - stAt, pulse = 1 + .07 * Math.sin(el / 170);
+    // 頂部橫幅
     g.fillStyle = 'rgba(0,0,0,.80)'; g.fillRect(0, 0, W, 96);
     boldT('🎉 恭喜你贏了！🎉', W / 2, 48, Math.floor(40 * pulse), '#FFD700', '#FF6600', '#FFD700');
+    // 底部說明
     g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, H - 62, W, 62);
     smT(`你的 ${EM[pG]}${LB[pG]}  打敗了  電腦的 ${EM[cG]}${LB[cG]}`, W / 2, H - 31, 19, '#FFF');
 }
@@ -399,12 +471,16 @@ function dLose() {
     const el = Date.now() - stAt;
     maskP = Math.min(1, el / 700);
     drawResultBg();
+    // 紅色氛圍疊加在底層
     g.fillStyle = `rgba(140,0,0,${maskP * .28})`; g.fillRect(0, 0, W, H);
+    // 電腦側出現惡魔面具（移至卡片下方空間）
     drawMask(W * .72, H * .78, maskP * .85);
     scoreHUD();
+    // 頂部橫幅
     g.fillStyle = 'rgba(0,0,0,.82)'; g.fillRect(0, 0, W, 96);
     const sh = el < 800 ? Math.sin(el / 38) * 4 : 0;
     boldT('😢 你輸了！', W / 2 + sh, 48, 44, '#FF2222', '#000', '#FF2222');
+    // 底部說明
     g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, H - 62, W, 62);
     smT(`你的 ${EM[pG]}${LB[pG]}  輸給了  電腦的 ${EM[cG]}${LB[cG]}`, W / 2, H - 31, 19, '#FFF');
 }
@@ -413,12 +489,15 @@ function dDraw() {
     const el = Date.now() - stAt, pulse = 1 + .06 * Math.sin(el / 160);
     drawResultBg();
     scoreHUD();
+    // 頂部橫幅
     g.fillStyle = 'rgba(0,0,0,.80)'; g.fillRect(0, 0, W, 96);
     boldT('🤝 平局！再來一次！', W / 2, 48, Math.floor(38 * pulse), '#FFD93D', '#000', '#FFD93D');
+    // 底部說明
     g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, H - 62, W, 62);
     smT(`你們都出了 ${EM[pG]}${LB[pG]}，旗鼓相當！`, W / 2, H - 31, 19, '#FFF');
 }
 
+// ── 修改 5：dMenu 更新選單手勢提示文字，改用比六/比七 ──
 function dMenu() {
     g.fillStyle = 'rgba(0,0,0,.78)'; g.fillRect(0, 0, W, H);
     scoreHUD();
@@ -436,8 +515,10 @@ function dMenu() {
     g.fillStyle = 'rgba(255,255,255,.06)'; rr(20, H / 2 + 90, W - 40, 32, 8); g.fill();
     g.font = '13px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(255,255,255,.45)';
+    // ── 修改後的提示文字：比六結束、比七繼續，不分左右手 ──
     g.fillText('💡 🤙 比六（拇指+小指）🏠 結束  ·  ☝️ 比七（拇指+食指）🎮 繼續', W / 2, H / 2 + 106); g.restore();
 
+    // 手勢偵測進度條（改為偵測 six / seven，不再分左右手）
     if (st === 'menu' && (stable === 'six' || stable === 'seven')) {
         const pct = menuHoldT ? Math.min(1, (Date.now() - menuHoldT) / HOLD) : 0;
         const col = stable === 'seven' ? '#00FF88' : '#FF4444';
@@ -457,13 +538,15 @@ function dEnded() {
     smT('重新整理頁面可再次遊戲', W / 2, H / 2 + 60, 15, 'rgba(255,255,255,.32)');
 }
 
+
 // ─────────────────────────────────────────────────────────────
-//  UPDATE (已完全修正：改用 Switch 結構防止狀態連鎖跳過)
+//  UPDATE (已修正狀態連鎖跳過 Bug)
 // ─────────────────────────────────────────────────────────────
 function update() {
     const now = Date.now(), el = now - stAt;
     tickP();
 
+    // 改用 switch 結構，確保一幀只會處理並待在一個狀態中
     switch (st) {
         case 'menu':
             if (stable === 'six' || stable === 'seven') {
@@ -518,9 +601,6 @@ function update() {
         case 'draw':
             if (el > 2500) enter('menu');
             break;
-            
-        default:
-            break;
     }
 }
 
@@ -536,7 +616,7 @@ function onClk(e) {
 function startGame() {
     parts = []; maskP = 0; gBuf = []; stable = null;
     holdT = null; pG = null; cG = null;
-    menuHoldT = null; 
+    menuHoldT = null;  // ── 修改 8：重置選單計時器，避免殘留狀態 ──
     stopFW(); enter('idle');
 }
 
