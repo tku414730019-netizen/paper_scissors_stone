@@ -110,7 +110,8 @@ function classify(l) {
         indexOpen &&
         !middleOpen &&
         !ringOpen &&
-        !pinkyOpen;
+        !pinkyOpen &&
+        n === 1;
 
     // ─────────────────────────────────────
     // 七（版本2）
@@ -121,7 +122,8 @@ function classify(l) {
         indexOpen &&
         !middleOpen &&
         !ringOpen &&
-        !pinkyOpen;
+        !pinkyOpen &&
+        n === 1;
 
     if (sevenA || sevenB) {
         return 'seven';
@@ -574,7 +576,7 @@ function update() {
             enter('reveal');
         }
     }
-    if (st === 'reveal' && el > 2200) {
+    if (st === 'reveal' && el > 1600) {
         const res = pG === cG ? 'draw' : BEATS[pG] === cG ? 'win' : 'lose';
         if (res === 'win') score.w++;
         else if (res === 'lose') score.l++;
@@ -582,9 +584,9 @@ function update() {
         enter(res); maskP = 0;
         if (res === 'win') startFW();
     }
-    if (st === 'win' && el > 6200) { stopFW(); enter('menu'); }
-    if (st === 'lose' && el > 5200) enter('menu');
-    if (st === 'draw' && el > 4200) enter('menu');
+    if (st === 'win' && el > 3800) { stopFW(); enter('menu'); }
+    if (st === 'lose' && el > 3200) enter('menu');
+    if (st === 'draw' && el > 2500) enter('menu');
 }
 
 function onClk(e) {
