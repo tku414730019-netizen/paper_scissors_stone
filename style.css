@@ -6,7 +6,7 @@
 
 body {
   /* 轉為深翠森林與泥土大地的自然漸層色調 */
-  background: linear-gradient(135deg, #0f1f15 0%, #070d09 60%, #1a1c12 100%);
+  background: linear-gradient(135deg, #66ce8e 0%, #070d09 60%, #80856d 100%);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
