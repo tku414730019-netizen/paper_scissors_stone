@@ -9,8 +9,21 @@ const g = cv.getContext('2d');
 const vid = document.getElementById('vid');
 
 const PICKS = ['rock', 'paper', 'scissors'];
-const EM = { rock: '✊', paper: '🖐', scissors: '✌️', thumbs_up: '👍' };
-const LB = { rock: '石頭', paper: '布', scissors: '剪刀', thumbs_up: '讚' };
+const EM = {
+    rock: '✊',
+    paper: '🖐',
+    scissors: '✌️',
+    six: '🤙',
+    seven: '👌'
+  };
+  
+  const LB = {
+    rock: '石頭',
+    paper: '布',
+    scissors: '剪刀',
+    six: '六',
+    seven: '七'
+  };
 const BEATS = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
 const PAL = ['#FF6B6B', '#FFE66D', '#4ECDC4', '#C3A6FF', '#FF9F43', '#56CCF2', '#FD79A8', '#A3F7BF'];
 const SKEL = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12],
@@ -61,27 +74,54 @@ cv.addEventListener('click', onClk);
 // ─────────────────────────────────────────────────────────────
 //  GESTURE CLASSIFICATION
 // ─────────────────────────────────────────────────────────────
-function classify(l) {
-    const tips = [8, 12, 16, 20], pips = [6, 10, 14, 18];
-    const ext = tips.map((t, i) => l[t].y < l[pips[i]].y);
+function classify(l){
+
+    const thumbOpen  = Math.abs(l[4].x - l[3].x) > 0.04;
+    const indexOpen  = l[8].y  < l[6].y;
+    const middleOpen = l[12].y < l[10].y;
+    const ringOpen   = l[16].y < l[14].y;
+    const pinkyOpen  = l[20].y < l[18].y;
+  
+    // 比六：大拇指 + 小拇指
+    if(
+      thumbOpen &&
+      pinkyOpen &&
+      !indexOpen &&
+      !middleOpen &&
+      !ringOpen
+    ){
+      return 'six';
+    }
+  
+    // 比七：大拇指 + 食指
+    if(
+      thumbOpen &&
+      indexOpen &&
+      !middleOpen &&
+      !ringOpen &&
+      !pinkyOpen
+    ){
+      return 'seven';
+    }
+  
+    // 原本猜拳邏輯
+    const ext = [indexOpen, middleOpen, ringOpen, pinkyOpen];
     const n = ext.filter(Boolean).length;
-
-    // 偵測比讚 (Thumbs Up): 拇指尖端明顯高於手掌中心與其餘關節
-    const thumbUp = l[4].y < l[3].y && l[4].y < l[2].y && l[4].y < l[5].y;
-    if (thumbUp && n === 0) return 'thumbs_up';
-
-    if (n === 0) return 'rock';
-    if (n >= 3) return 'paper';
-    if (ext[0] && ext[1] && !ext[2] && !ext[3]) return 'scissors';
+  
+    if(n === 0) return 'rock';
+    if(n >= 3) return 'paper';
+  
+    if(
+      ext[0] &&
+      ext[1] &&
+      !ext[2] &&
+      !ext[3]
+    ){
+      return 'scissors';
+    }
+  
     return 'unknown';
-}
-function vote(buf) {
-    if (buf.length < 6) return null;
-    const c = {}; buf.forEach(v => { c[v] = (c[v] || 0) + 1; });
-    let b = null, bn = 0;
-    for (const v in c) if (v !== 'unknown' && c[v] > bn) { bn = c[v]; b = v; }
-    return bn / buf.length >= .55 ? b : null;
-}
+  }
 
 // ─────────────────────────────────────────────────────────────
 //  SWIPE DETECTION  (mirrored coords: right swipe = +dx)
@@ -389,7 +429,7 @@ function dMenu() {
     g.font = '14px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(255,255,255,.5)';
     g.fillText(`✅ ${score.w}勝  ❌ ${score.l}敗  🤝 ${score.d}平`, W / 2, H / 2 - 33); g.restore();
-    smT('點擊按鈕，或比出 👍 選擇', W / 2, H / 2 + 6, 14);
+    smT('🤙 比六：結束　｜　👌 比七：繼續', W / 2, H / 2 + 6, 14);
     const bw = 132, bh = 52, by = H / 2 + 24;
     btn('🏠 結束', W / 2 - bw - 8, by, bw, bh, '#CC2200'); 
     btn('🎮 繼續', W / 2 + 8, by, bw, bh, '#00AA44');      
@@ -397,16 +437,34 @@ function dMenu() {
     g.fillStyle = 'rgba(255,255,255,.06)'; rr(20, H / 2 + 90, W - 40, 32, 8); g.fill();
     g.font = '13px Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(255,255,255,.45)';
-    g.fillText('💡 右手比 👍 🎮 繼續  ·  左手比 👍 🏠 結束', W / 2, H / 2 + 106); g.restore();
+    g.fillText(
+        '💡 不分左右手：🤙 結束遊戲 ・ 👌 再玩一局',
+        W / 2,
+        H / 2 + 106
+      ); g.restore();
 
     // 繪製選單手勢進度條
-    if (st === 'menu' && stable === 'thumbs_up') {
-        const pct = menuHoldT ? Math.min(1, (Date.now() - menuHoldT) / HOLD) : 0;
-        const isRight = handedness === 'Right';
-        const col = isRight ? '#00FF88' : '#FF4444';
-        g.fillStyle = 'rgba(255,255,255,0.1)'; rr(W / 2 - 100, H / 2 + 132, 200, 8, 4); g.fill();
-        g.fillStyle = col; rr(W / 2 - 100, H / 2 + 132, 200 * pct, 8, 4); g.fill();
-        const txt = isRight ? '🎮 準備繼續...' : '🏠 準備結束...';
+    if (st === 'menu' && (stable === 'six' || stable === 'seven')) {
+
+        const pct = menuHoldT
+            ? Math.min(1, (Date.now() - menuHoldT) / HOLD)
+            : 0;
+    
+        const isContinue = stable === 'seven';
+        const col = isContinue ? '#00FF88' : '#FF4444';
+    
+        g.fillStyle = 'rgba(255,255,255,0.1)';
+        rr(W / 2 - 100, H / 2 + 132, 200, 8, 4);
+        g.fill();
+    
+        g.fillStyle = col;
+        rr(W / 2 - 100, H / 2 + 132, 200 * pct, 8, 4);
+        g.fill();
+    
+        const txt = isContinue
+            ? '🎮 準備繼續...'
+            : '🏠 準備結束...';
+    
         boldT(txt, W / 2, H / 2 + 158, 20, col, '#000');
     }
 }
@@ -425,16 +483,27 @@ function update() {
     tickP();
 
     // 選單狀態的邏輯處理
-    if (st === 'menu') {
-        if (stable === 'thumbs_up' && handedness) {
-            if (!menuHoldT) menuHoldT = now;
-            if (now - menuHoldT >= HOLD) {
-                if (handedness === 'Right') startGame();
-                else enter('ended');
-                menuHoldT = null;
+    if(st==='menu'){
+
+        if(stable==='six' || stable==='seven'){
+    
+            if(!menuHoldT) menuHoldT=now;
+    
+            if(now-menuHoldT>=HOLD){
+    
+                if(stable==='seven'){
+                    startGame();
+                }
+    
+                if(stable==='six'){
+                    enter('ended');
+                }
+    
+                menuHoldT=null;
             }
-        } else {
-            menuHoldT = null;
+    
+        }else{
+            menuHoldT=null;
         }
     }
 
@@ -484,10 +553,22 @@ function onClk(e) {
     if (cx >= W / 2 + 8 && cx <= W / 2 + 8 + bw && cy >= by && cy <= by + bh) startGame(); // 右鍵：繼續
     if (cx >= W / 2 - bw - 8 && cx <= W / 2 - 8 && cy >= by && cy <= by + bh) enter('ended'); // 左鍵：結束
 }
+
 function startGame() {
-    parts = []; maskP = 0; gBuf = []; stable = null;
-    holdT = null; pG = null; cG = null;
-    stopFW(); enter('idle');
+
+    parts = [];
+    maskP = 0;
+    gBuf = [];
+    stable = null;
+
+    holdT = null;
+    menuHoldT = null;
+
+    pG = null;
+    cG = null;
+
+    stopFW();
+    enter('idle');
 }
 
 function loop() {
