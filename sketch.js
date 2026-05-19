@@ -289,7 +289,7 @@ function drawResultBg() {
 function dLoading() {
     g.fillStyle = '#0d1117'; g.fillRect(0, 0, W, H);
     const t = Date.now() / 1000;
-    boldT('載入 AI 手勢辨識中…', W / 2, H / 2 - 24, 26, '#FFF', null, '#4ECDC4');
+    boldT('載入 ai 手勢辨識中…', W / 2, H / 2 - 24, 26, '#FFF', null, '#4ECDC4');
     g.save(); g.strokeStyle = '#4ECDC4'; g.lineWidth = 5; g.lineCap = 'round';
     g.beginPath(); g.arc(W / 2, H / 2 + 44, 24, t * 2.8, t * 2.8 + Math.PI * 1.4); g.stroke(); g.restore();
     smT('請允許攝影機存取', W / 2, H / 2 + 94, 14, 'rgba(255,255,255,.35)');
