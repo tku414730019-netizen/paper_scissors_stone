@@ -538,55 +538,70 @@ function dEnded() {
     smT('重新整理頁面可再次遊戲', W / 2, H / 2 + 60, 15, 'rgba(255,255,255,.32)');
 }
 
+
 // ─────────────────────────────────────────────────────────────
-//  UPDATE
+//  UPDATE (已修正狀態連鎖跳過 Bug)
 // ─────────────────────────────────────────────────────────────
 function update() {
     const now = Date.now(), el = now - stAt;
     tickP();
 
-    // ── 修改 6：選單改用 six（結束）/ seven（繼續），不分左右手 ──
-    if (st === 'menu') {
-        if (stable === 'six' || stable === 'seven') {
-            if (!menuHoldT) menuHoldT = now;
-            if (now - menuHoldT >= HOLD) {
-                if (stable === 'seven') startGame();   // 比七 → 繼續
-                else enter('ended');                   // 比六 → 結束
+    // 改用 switch 結構，確保一幀只會處理並待在一個狀態中
+    switch (st) {
+        case 'menu':
+            if (stable === 'six' || stable === 'seven') {
+                if (!menuHoldT) menuHoldT = now;
+                if (now - menuHoldT >= HOLD) {
+                    if (stable === 'seven') startGame();   // 比七 → 繼續
+                    else enter('ended');                   // 比六 → 結束
+                    menuHoldT = null;
+                }
+            } else {
                 menuHoldT = null;
             }
-        } else {
-            menuHoldT = null;
-        }
-    }
+            break;
 
-    if (st === 'idle') {
-        if (stable && PICKS.includes(stable)) {
-            if (pG !== stable) { holdT = now; pG = stable; }
-            if (now - holdT >= HOLD) { enter('countdown'); }
-        } else if (stable === 'thumbs_up' || stable === 'six' || stable === 'seven' || !lm) {
-            // ── 修改 7：six / seven 也要重置計時，避免誤觸發倒數 ──
-            holdT = null; pG = null;
-        }
+        case 'idle':
+            if (stable && PICKS.includes(stable)) {
+                if (pG !== stable) { holdT = now; pG = stable; }
+                if (now - holdT >= HOLD) { enter('countdown'); }
+            } else if (stable === 'thumbs_up' || stable === 'six' || stable === 'seven' || !lm) {
+                holdT = null; pG = null;
+            }
+            break;
+
+        case 'countdown':
+            if (stable && PICKS.includes(stable)) pG = stable;
+            if (el >= CD * 1000) {
+                if (!pG) pG = PICKS[Math.random() * 3 | 0];
+                cG = PICKS[Math.random() * 3 | 0];
+                enter('reveal');
+            }
+            break;
+
+        case 'reveal':
+            if (el > 1600) {
+                const res = pG === cG ? 'draw' : BEATS[pG] === cG ? 'win' : 'lose';
+                if (res === 'win') score.w++;
+                else if (res === 'lose') score.l++;
+                else score.d++;
+                enter(res); maskP = 0;
+                if (res === 'win') startFW();
+            }
+            break;
+
+        case 'win':
+            if (el > 3800) { stopFW(); enter('menu'); }
+            break;
+
+        case 'lose':
+            if (el > 3200) enter('menu');
+            break;
+
+        case 'draw':
+            if (el > 2500) enter('menu');
+            break;
     }
-    if (st === 'countdown') {
-        if (stable && PICKS.includes(stable)) pG = stable;
-        if (el >= CD * 1000) {
-            if (!pG) pG = PICKS[Math.random() * 3 | 0];
-            cG = PICKS[Math.random() * 3 | 0];
-            enter('reveal');
-        }
-    }
-    if (st === 'reveal' && el > 1600) {
-        const res = pG === cG ? 'draw' : BEATS[pG] === cG ? 'win' : 'lose';
-        if (res === 'win') score.w++;
-        else if (res === 'lose') score.l++;
-        else score.d++;
-        enter(res); maskP = 0;
-        if (res === 'win') startFW();
-    }
-    if (st === 'win' && el > 3800) { stopFW(); enter('menu'); }
-    if (st === 'lose' && el > 3200) enter('menu');
-    if (st === 'draw' && el > 2500) enter('menu');
 }
 
 function onClk(e) {
